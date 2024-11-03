@@ -3,14 +3,14 @@ package com.example.emanager.views.fragments;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.os.Bundle;
-
-import androidx.recyclerview.widget.DividerItemDecoration;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.LinearLayoutManager;
-
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
+
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.example.emanager.R;
 import com.example.emanager.adapters.AccountsAdapter;
@@ -23,13 +23,18 @@ import com.example.emanager.models.Transaction;
 import com.example.emanager.utils.Constants;
 import com.example.emanager.utils.Helper;
 import com.example.emanager.views.activites.MainActivity;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 
 public class AddTransactionFragment extends BottomSheetDialogFragment {
+
+    private FragmentAddTransactionBinding binding;
+    private Transaction transaction;
+    private Calendar calendar;
 
     public AddTransactionFragment() {
         // Required empty public constructor
@@ -38,84 +43,123 @@ public class AddTransactionFragment extends BottomSheetDialogFragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        calendar = Calendar.getInstance();
     }
-
-    FragmentAddTransactionBinding binding;
-    Transaction transaction;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         binding = FragmentAddTransactionBinding.inflate(inflater);
+        initializeViews();
+        return binding.getRoot();
+    }
 
-
+    private void initializeViews() {
+        // Initialize new transaction
         transaction = new Transaction();
+        transaction.setType(Constants.INCOME); // Default type
+        transaction.setDate(calendar.getTime()); // Default date (today)
+        transaction.setId(calendar.getTimeInMillis());
+
+        // Set default date text
+        binding.date.setText(Helper.formatDate(calendar.getTime()));
+
+        setupTransactionTypeButtons();
+        setupDatePicker();
+        setupCategorySelection();
+        setupAccountSelection();
+        setupSaveButton();
+    }
+
+    private void setupTransactionTypeButtons() {
+        // Default state (Income selected)
+        updateTransactionTypeUI(true);
 
         binding.incomeBtn.setOnClickListener(view -> {
-            binding.incomeBtn.setBackground(getContext().getDrawable(R.drawable.income_selector));
-            binding.expenseBtn.setBackground(getContext().getDrawable(R.drawable.default_selector));
-            binding.expenseBtn.setTextColor(getContext().getColor(R.color.textColor));
-            binding.incomeBtn.setTextColor(getContext().getColor(R.color.greenColor));
-
+            updateTransactionTypeUI(true);
             transaction.setType(Constants.INCOME);
         });
 
         binding.expenseBtn.setOnClickListener(view -> {
+            updateTransactionTypeUI(false);
+            transaction.setType(Constants.EXPENSE);
+        });
+    }
+
+    private void updateTransactionTypeUI(boolean isIncome) {
+        if (isIncome) {
+            binding.incomeBtn.setBackground(getContext().getDrawable(R.drawable.income_selector));
+            binding.expenseBtn.setBackground(getContext().getDrawable(R.drawable.default_selector));
+            binding.expenseBtn.setTextColor(getContext().getColor(R.color.textColor));
+            binding.incomeBtn.setTextColor(getContext().getColor(R.color.greenColor));
+        } else {
             binding.incomeBtn.setBackground(getContext().getDrawable(R.drawable.default_selector));
             binding.expenseBtn.setBackground(getContext().getDrawable(R.drawable.expense_selector));
             binding.incomeBtn.setTextColor(getContext().getColor(R.color.textColor));
             binding.expenseBtn.setTextColor(getContext().getColor(R.color.redColor));
+        }
+    }
 
-            transaction.setType(Constants.EXPENSE);
+    private void setupDatePicker() {
+        binding.date.setOnClickListener(view -> {
+            DatePickerDialog datePickerDialog = new DatePickerDialog(
+                    getContext(),
+                    (datePicker, year, month, day) -> {
+                        calendar.set(Calendar.YEAR, year);
+                        calendar.set(Calendar.MONTH, month);
+                        calendar.set(Calendar.DAY_OF_MONTH, day);
+                        calendar.set(Calendar.HOUR_OF_DAY, 0);
+                        calendar.set(Calendar.MINUTE, 0);
+                        calendar.set(Calendar.SECOND, 0);
+                        calendar.set(Calendar.MILLISECOND, 0);
+
+                        Date selectedDate = calendar.getTime();
+                        binding.date.setText(Helper.formatDate(selectedDate));
+                        transaction.setDate(selectedDate);
+                        transaction.setId(calendar.getTimeInMillis());
+                    },
+                    calendar.get(Calendar.YEAR),
+                    calendar.get(Calendar.MONTH),
+                    calendar.get(Calendar.DAY_OF_MONTH)
+            );
+
+            // Set max date to today
+            datePickerDialog.getDatePicker().setMaxDate(System.currentTimeMillis());
+            datePickerDialog.show();
         });
+    }
 
-        binding.date.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                DatePickerDialog datePickerDialog = new DatePickerDialog(getContext());
-                datePickerDialog.setOnDateSetListener((datePicker, i, i1, i2) -> {
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.set(Calendar.DAY_OF_MONTH, datePicker.getDayOfMonth());
-                    calendar.set(Calendar.MONTH, datePicker.getMonth());
-                    calendar.set(Calendar.YEAR, datePicker.getYear());
+    private void setupCategorySelection() {
+        binding.category.setOnClickListener(view -> {
+            ListDialogBinding dialogBinding = ListDialogBinding.inflate(getLayoutInflater());
+            AlertDialog categoryDialog = new AlertDialog.Builder(getContext())
+                    .setTitle("Select Category")
+                    .setView(dialogBinding.getRoot())
+                    .create();
 
-                    //SimpleDateFormat dateFormat = new SimpleDateFormat("dd MMMM, yyyy");
-                    String dateToShow = Helper.formatDate(calendar.getTime());
+            CategoryAdapter categoryAdapter = new CategoryAdapter(
+                    getContext(),
+                    Constants.categories,
+                    category -> {
+                        binding.category.setText(category.getCategoryName());
+                        transaction.setCategory(category.getCategoryName());
+                        categoryDialog.dismiss();
+                    }
+            );
 
-                    binding.date.setText(dateToShow);
-
-                    transaction.setDate(calendar.getTime());
-                    transaction.setId(calendar.getTime().getTime());
-                });
-                datePickerDialog.show();
-            }
-        });
-
-        binding.category.setOnClickListener(c-> {
-            ListDialogBinding dialogBinding = ListDialogBinding.inflate(inflater);
-            AlertDialog categoryDialog = new AlertDialog.Builder(getContext()).create();
-            categoryDialog.setView(dialogBinding.getRoot());
-
-
-
-            CategoryAdapter categoryAdapter = new CategoryAdapter(getContext(), Constants.categories, new CategoryAdapter.CategoryClickListener() {
-                @Override
-                public void onCategoryClicked(Category category) {
-                    binding.category.setText(category.getCategoryName());
-                    transaction.setCategory(category.getCategoryName());
-                    categoryDialog.dismiss();
-                }
-            });
-            dialogBinding.recyclerView.setLayoutManager(new GridLayoutManager(getContext(),3));
+            dialogBinding.recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 3));
             dialogBinding.recyclerView.setAdapter(categoryAdapter);
-
             categoryDialog.show();
         });
+    }
 
-        binding.account.setOnClickListener(c-> {
-            ListDialogBinding dialogBinding = ListDialogBinding.inflate(inflater);
-            AlertDialog accountsDialog = new AlertDialog.Builder(getContext()).create();
-            accountsDialog.setView(dialogBinding.getRoot());
+    private void setupAccountSelection() {
+        binding.account.setOnClickListener(view -> {
+            ListDialogBinding dialogBinding = ListDialogBinding.inflate(getLayoutInflater());
+            AlertDialog accountsDialog = new AlertDialog.Builder(getContext())
+                    .setTitle("Select Account")
+                    .setView(dialogBinding.getRoot())
+                    .create();
 
             ArrayList<Account> accounts = new ArrayList<>();
             accounts.add(new Account(0, "Cash"));
@@ -124,39 +168,79 @@ public class AddTransactionFragment extends BottomSheetDialogFragment {
             accounts.add(new Account(0, "EasyPaisa"));
             accounts.add(new Account(0, "Other"));
 
-            AccountsAdapter adapter = new AccountsAdapter(getContext(), accounts, new AccountsAdapter.AccountsClickListener() {
-                @Override
-                public void onAccountSelected(Account account) {
-                    binding.account.setText(account.getAccountName());
-                    transaction.setAccount(account.getAccountName());
-                    accountsDialog.dismiss();
-                }
-            });
+            AccountsAdapter adapter = new AccountsAdapter(
+                    getContext(),
+                    accounts,
+                    account -> {
+                        binding.account.setText(account.getAccountName());
+                        transaction.setAccount(account.getAccountName());
+                        accountsDialog.dismiss();
+                    }
+            );
+
             dialogBinding.recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-            //dialogBinding.recyclerView.addItemDecoration(new DividerItemDecoration(getContext(), DividerItemDecoration.VERTICAL));
             dialogBinding.recyclerView.setAdapter(adapter);
-
             accountsDialog.show();
-
         });
+    }
 
-        binding.saveTransactionBtn.setOnClickListener(c-> {
-            double amount = Double.parseDouble(binding.amount.getText().toString());
-            String note = binding.note.getText().toString();
+    private void setupSaveButton() {
+        binding.saveTransactionBtn.setOnClickListener(view -> {
+            if (validateTransaction()) {
+                try {
+                    double amount = Double.parseDouble(binding.amount.getText().toString());
+                    String note = binding.note.getText().toString().trim();
 
-            if(transaction.getType().equals(Constants.EXPENSE)) {
-                transaction.setAmount(amount*-1);
-            } else {
-                transaction.setAmount(amount);
+                    transaction.setAmount(amount);
+                    transaction.setNote(note);
+
+                    // Save transaction using ViewModel
+                    ((MainActivity) requireActivity()).viewModel.addTransaction(transaction);
+                    ((MainActivity) requireActivity()).getTransactions();
+
+                    Toast.makeText(getContext(), "Transaction saved successfully", Toast.LENGTH_SHORT).show();
+                    dismiss();
+                } catch (Exception e) {
+                    Toast.makeText(getContext(), "Error saving transaction: " + e.getMessage(),
+                            Toast.LENGTH_SHORT).show();
+                }
             }
-
-            transaction.setNote(note);
-
-            ((MainActivity)getActivity()).viewModel.addTransaction(transaction);
-            ((MainActivity)getActivity()).getTransactions();
-            dismiss();
         });
+    }
 
-        return binding.getRoot();
+    private boolean validateTransaction() {
+        if (TextUtils.isEmpty(binding.amount.getText())) {
+            binding.amount.setError("Please enter amount");
+            return false;
+        }
+
+        try {
+            double amount = Double.parseDouble(binding.amount.getText().toString());
+            if (amount <= 0) {
+                binding.amount.setError("Amount must be greater than 0");
+                return false;
+            }
+        } catch (NumberFormatException e) {
+            binding.amount.setError("Invalid amount");
+            return false;
+        }
+
+        if (TextUtils.isEmpty(binding.category.getText())) {
+            Toast.makeText(getContext(), "Please select a category", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+
+        if (TextUtils.isEmpty(binding.account.getText())) {
+            Toast.makeText(getContext(), "Please select an account", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
     }
 }
