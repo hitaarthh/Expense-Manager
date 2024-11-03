@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         setSupportActionBar(binding.toolBar);
-        getSupportActionBar().setTitle("Transactions");
+        getSupportActionBar().setTitle("Expense Manager");
 
 
         Constants.setCategories();
